@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Источники — Curator</title>
+<style>
+* { box-sizing: border-box; }
+body { max-width: 960px; margin: 0 auto; padding: 20px; font-family: system-ui, sans-serif; line-height: 1.5; color: #222; }
+nav { margin-bottom: 16px; padding: 8px 0; border-bottom: 1px solid #ddd; font-size: .9rem; }
+nav a { color: #1a73e8; text-decoration: none; margin-right: 20px; }
+nav a:hover { text-decoration: underline; }
+h1 { font-size: 1.4rem; margin: 20px 0 8px; }
+h2 { font-size: 1.1rem; margin: 28px 0 10px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+h3.plat { font-size: .95rem; color: #555; margin: 16px 0 6px; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-bottom: 8px; }
+th { background: #f8f9fa; text-align: left; padding: 6px 10px; border-bottom: 2px solid #ddd; }
+td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+tr:hover td { background: #f8f9fa; }
+input[type=text], select { font-size: .9rem; padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; }
+button { font-size: .85rem; padding: 4px 12px; border: none; border-radius: 3px; cursor: pointer; }
+.btn-add { background: #1a73e8; color: #fff; margin-right: 4px; }
+.btn-add:hover { background: #1558b0; }
+.btn-reject { background: #f0f0f0; color: #555; }
+.btn-reject:hover { background: #e0e0e0; }
+.form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.score-badge { display: inline-block; background: #e8f0fe; color: #1a73e8; border-radius: 10px; padding: 1px 7px; font-size: .8rem; }
+.badge.lowsig { display: inline-block; background: #ffe0e0; color: #c5221f; border-radius: 8px; padding: 1px 6px; font-size: .75rem; margin-left: 4px; }
+.sort-arrow { color: #888; text-decoration: none; font-size: .75rem; margin-left: 2px; }
+.sort-arrow:hover { color: #1a73e8; }
+.empty { color: #888; font-style: italic; padding: 8px 0; }
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 10px 18px; border-radius: 6px; font-size: .9rem; display: none; z-index: 999; }
+.toast-ok { background: #e6f4ea; color: #137333; border: 1px solid #b7d9be; }
+.toast-err { background: #fce8e6; color: #c5221f; border: 1px solid #f5b9b5; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/">📰 Дайджест</a>
+  <a href="/research-tools">🔬 Research Tools</a>
+  <a href="/compare">⚖️ Сравнить</a>
+  <a href="/papers">📄 Статьи</a>
+  <a href="/search">🔍 Поиск</a>
+  <a href="/telemetry">📊 Телеметрия</a>
+  <a href="/sources">📡 Источники</a>
+  <a href="/career">🎯 Карьера</a>
+  <a href="http://localhost:8001" style="color:#2a9d2a">💰 Финансы</a>
+</nav>
+
+<h1>📡 Управление источниками</h1>
+
+<h2>Кандидаты ({{ candidates|length }})</h2>
+{% if candidates %}
+<table>
+<thead>
+  <tr>
+    <th>Handle</th><th>Score</th><th>Posts</th><th>RU%</th>
+    <th>Категория</th><th>Название</th><th></th>
+  </tr>
+</thead>
+<tbody>
+{% for c in candidates %}
+<tr id="cand-{{ loop.index }}">
+  <td><code>{{ c.handle }}</code></td>
+  <td><span class="score-badge">{{ "%.2f"|format(c.score) }}</span></td>
+  <td>{{ c.posts_count }}</td>
+  <td>{{ "%.0f"|format(c.russian_ratio * 100) }}%</td>
+  <td>
+    <select id="cat-{{ loop.index }}">
+      {% for cat in categories %}
+      <option value="{{ cat }}"{% if cat == c.category %} selected{% endif %}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td><input type="text" id="name-{{ loop.index }}" value="{{ c.display_name }}" style="width:160px"></td>
+  <td>
+    <button class="btn-add" onclick="approve('{{ c.handle }}', {{ loop.index }})">Добавить</button>
+    <button class="btn-reject" onclick="reject('{{ c.handle }}', {{ loop.index }})">Отклонить</button>
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<p class="empty">Нет новых кандидатов.</p>
+{% endif %}
+
+<h2>Добавить вручную</h2>
+<div class="form-row">
+  <select id="add-platform">
+    <option value="telegram">Telegram</option>
+    <option value="reddit">Reddit</option>
+    <option value="youtube">YouTube</option>
+  </select>
+  <input type="text" id="add-target" placeholder="@handle / r/sub / UCxxxx" style="width:210px">
+  <select id="add-category">
+    {% for cat in categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+  </select>
+  <input type="text" id="add-name" placeholder="Название" style="width:180px">
+  <button class="btn-add" onclick="addManual()">Добавить</button>
+</div>
+
+<h2>Активные источники</h2>
+{% for platform, sources in active_by_platform.items() %}
+<h3 class="plat">{{ platform }} ({{ sources|length }})</h3>
+<table>
+<thead><tr><th>Target</th><th>Категория</th><th>Название</th><th>Порог</th><th>adapter_weights</th><th>Redundancy</th><th>Quality <a class="sort-arrow" href="?sort=quality_score&amp;dir=asc">▲</a><a class="sort-arrow" href="?sort=quality_score&amp;dir=desc">▼</a></th></tr></thead>
+<tbody>
+{% for s in sources %}
+{% set _normtarget = s.target|normalize_target %}
+{% set meta = db_meta_by_key.get((platform, _normtarget)) %}
+<tr{% if meta %} id="source-{{ meta.id }}"{% endif %}>
+  <td><code>{{ s.target }}</code></td>
+  <td>{{ s.category }}</td>
+  <td>{{ s.display_name }}</td>
+  <td>
+    {% if meta %}
+    <input type="number" min="0" max="100" step="1"
+           data-source-id="{{ meta.id }}"
+           value="{{ meta.curator_threshold if meta.curator_threshold is not none else '' }}"
+           placeholder="env"
+           onchange="updateThreshold(this)"
+           style="width:60px"
+           title="Порог curated (пусто = env, 0-100)">
+    {% else %}
+    <span style="color:#888" title="Не в БД — запустите pipeline">—</span>
+    {% endif %}
+  </td>
+  <td>
+    {% if meta %}
+    <details>
+      <summary style="cursor:pointer;font-size:.85rem;color:#1a73e8">JSON</summary>
+      <textarea
+        data-source-id="{{ meta.id }}"
+        data-field="adapter_weights"
+        rows="3"
+        cols="36"
+        placeholder='{"timeline": 1.0}'
+        style="font-family:monospace;font-size:.8rem">{{ meta.adapter_weights or "" }}</textarea>
+      <br>
+      <button type="button" class="aw-save btn-add" data-source-id="{{ meta.id }}">Save</button>
+      <span class="aw-status" data-source-id="{{ meta.id }}" style="font-size:.8rem;margin-left:6px"></span>
+    </details>
+    {% else %}
+    <span style="color:#888">—</span>
+    {% endif %}
+  </td>
+  <td>
+    {% if meta and redundancy_by_source_id.get(meta.id) %}
+    {% set _r = redundancy_by_source_id.get(meta.id) %}
+    <a href="#source-{{ _r.partner_id }}" title="JSD={{ '%.3f'|format(_r.jsd) }}">{{ _r.partner_display }}</a>
+    {% endif %}
+  </td>
+  <td>
+    {% set _q = quality_by_source_id.get(meta.id) if meta else None %}
+    {% if _q and _q.quality_score is not none %}
+      <span title="computed: {{ _q.quality_computed_at or 'unknown' }}">
+        {{ "%.2f"|format(_q.quality_score) }}</span>{% if _q.quality_score < 0.1 %}<span class="badge lowsig">low-signal</span>{% endif %}
+      {% if _q.quality_computed_at %}<span style="font-size:.75rem;color:#888;display:block">{{ _q.quality_computed_at[:10] }}</span>{% endif %}
+    {% else %}<span style="color:#888">—</span>{% endif %}
+    {% set _au = auto_unsub_by_source_id.get(meta.id) if meta else None %}
+    {% if _au and _au.disabled_at %}
+      <span class="badge auto-unsub-disabled" title="auto-disabled at {{ _au.disabled_at }}" style="background:#fce8e6;color:#c5221f;border-radius:8px;padding:1px 6px;font-size:.75rem;margin-left:4px">🔇 auto-disabled</span>
+    {% elif _au and _au.warned_at %}
+      <span class="badge auto-unsub-warned" title="warned at {{ _au.warned_at }}" style="background:#fef7e0;color:#b06000;border-radius:8px;padding:1px 6px;font-size:.75rem;margin-left:4px">⚠ warned</span>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endfor %}
+
+<div id="toast" class="toast"></div>
+<script>
+function showToast(msg, ok) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (ok ? 'toast-ok' : 'toast-err');
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 3000);
+}
+
+async function post(url, body) {
+  return fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+}
+
+async function approve(handle, idx) {
+  const cat = document.getElementById('cat-' + idx).value;
+  const name = document.getElementById('name-' + idx).value;
+  const r = await post('/api/sources/approve', {handle, category: cat, display_name: name});
+  if (r.ok) {
+    document.getElementById('cand-' + idx).remove();
+    showToast('Добавлено: ' + handle, true);
+  } else {
+    const d = await r.json().catch(() => ({}));
+    showToast(d.detail || 'Ошибка', false);
+  }
+}
+
+async function reject(handle, idx) {
+  const r = await post('/api/sources/reject', {handle});
+  if (r.ok) {
+    document.getElementById('cand-' + idx).remove();
+    showToast('Отклонено: ' + handle, true);
+  } else {
+    showToast('Ошибка при отклонении', false);
+  }
+}
+
+async function updateThreshold(el) {
+  // Phase 62 / SOURCE-THRESH-01: PATCH /api/source/{id}/threshold.
+  // Empty input -> JSON null -> clears override -> env fallback.
+  const id = el.dataset.sourceId;
+  const raw = el.value.trim();
+  const value = raw === '' ? null : Number(raw);
+  if (raw !== '' && (Number.isNaN(value) || value < 0 || value > 100)) {
+    showToast('Порог 0-100 или пусто', false);
+    return;
+  }
+  try {
+    const r = await fetch(`/api/source/${id}/threshold`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({value}),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${r.status}`);
+    }
+    showToast('Сохранено: ' + (value === null ? 'env' : value), true);
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, false);
+  }
+}
+
+// Phase 81 / MIX-PROMPTS-01: inline save for adapter_weights textareas.
+// Empty textarea -> JSON null -> clears override. Server validates parse+styles+weights.
+document.querySelectorAll('.aw-save').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.sourceId;
+    const ta = document.querySelector(`textarea[data-source-id="${id}"][data-field="adapter_weights"]`);
+    const status = document.querySelector(`.aw-status[data-source-id="${id}"]`);
+    const value = ta.value.trim() === "" ? null : ta.value;
+    try {
+      const resp = await fetch(`/api/source/${id}/adapter_weights`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({value}),
+      });
+      if (resp.ok) {
+        status.textContent = '✓ saved';
+        status.style.color = '#137333';
+      } else {
+        const d = await resp.json().catch(() => ({}));
+        status.textContent = `✗ ${resp.status} ${d.detail || ''}`;
+        status.style.color = '#c5221f';
+      }
+    } catch (e) {
+      status.textContent = '✗ ' + e.message;
+      status.style.color = '#c5221f';
+    }
+  });
+});
+
+async function addManual() {
+  const platform = document.getElementById('add-platform').value;
+  const target = document.getElementById('add-target').value.trim();
+  const category = document.getElementById('add-category').value;
+  const display_name = document.getElementById('add-name').value.trim();
+  if (!target) { showToast('Укажи target', false); return; }
+  const r = await post('/api/sources/add', {platform, target, category, display_name});
+  if (r.ok) {
+    document.getElementById('add-target').value = '';
+    document.getElementById('add-name').value = '';
+    showToast('Добавлено: ' + target, true);
+  } else {
+    const d = await r.json().catch(() => ({}));
+    showToast(d.detail || 'Ошибка', false);
+  }
+}
+</script>
+</body>
+</html>

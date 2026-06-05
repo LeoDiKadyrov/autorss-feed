@@ -1,0 +1,7 @@
+# format: target | category | display_name [| platform]
+# platform defaults to telegram
+@durov | ai | Pavel Durov
+r/MachineLearning | ai | r/MachineLearning | reddit
+cs.AI | ai | ArXiv cs.AI | arxiv
+UCBJycsmduvYEL83R_U4JriQ | ai | Two Minute Papers | youtube
+neuroscience | research | bioRxiv Neuroscience | biorxiv

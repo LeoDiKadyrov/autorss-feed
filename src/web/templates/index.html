@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Personal Curator</title>
+    <style>
+        body { max-width: 800px; margin: 40px auto; font-family: system-ui, sans-serif; line-height: 1.6; color: #333; }
+        .digest { border-bottom: 1px solid #ccc; padding-bottom: 20px; margin-bottom: 20px; }
+
+        /* Phase 12 / TOPIC-04: topic sub-headers under category sections */
+        .digest h3 {
+            font-size: 18px;
+            color: #555;
+            margin-top: 18px;
+            margin-bottom: 6px;
+            padding-left: 8px;
+            border-left: 3px solid #aaa;
+        }
+
+        /* Phase 6 / AUTO-02: last-run badge (D-11, D-12) */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: ui-monospace, monospace;
+            margin-bottom: 16px;
+            border: 1px solid;
+        }
+        .badge-ok {
+            background: #e8f5e9;
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+        .badge-fail {
+            background: #ffebee;
+            border-color: #f44336;
+            color: #c62828;
+        }
+        /* Phase 7 / D-19: profile-fallback indicator */
+        .badge-warn {
+            background: #fff8e1;
+            border-color: #ffc107;
+            color: #856404;
+            margin-left: 8px;
+        }
+
+        /* v1.3: suspect-flag badge */
+        .badge-suspect {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-family: ui-monospace, monospace;
+            background: #fff3e0;
+            border: 1px solid #ff9800;
+            color: #e65100;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        /* Phase 5 / FB-03: vote buttons (D-08, D-10) */
+        .vote-buttons { display: inline-block; margin-left: 8px; vertical-align: middle; }
+        .vote-buttons button {
+            background: none;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 2px 8px;
+            margin: 0 2px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+        .vote-buttons button.voted.vote-up {
+            border-color: #4caf50;
+            background: #e8f5e9;
+        }
+        .vote-buttons button.voted.vote-down {
+            border-color: #f44336;
+            background: #ffebee;
+        }
+        .vote-buttons button.disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* Phase 10 / EXTRACT-06: per-post extraction status badges (D-16, D-18) */
+        .badge-extract {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-family: ui-monospace, monospace;
+            margin-left: 6px;
+            border: 1px solid;
+            vertical-align: middle;
+        }
+        .badge-extract-success { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+        .badge-extract-blocked { background: #ffebee; border-color: #f44336; color: #c62828; }
+        .badge-extract-timeout { background: #fff8e1; border-color: #ffc107; color: #856404; }
+        .badge-extract-http-error { background: #fff8e1; border-color: #ffc107; color: #856404; }
+        .badge-extract-parse-error { background: #f3f3f3; border-color: #999; color: #555; }
+
+        /* Collapsible extracted-body panel (D-16: collapsed by default) */
+        .extract-toggle {
+            cursor: pointer;
+            font-size: 11px;
+            text-decoration: underline;
+            margin-left: 4px;
+            color: #555;
+            user-select: none;
+        }
+        .extract-body {
+            display: none;
+            padding: 8px;
+            background: #fafafa;
+            border-left: 3px solid #ccc;
+            margin: 8px 0;
+            white-space: pre-wrap;
+            font-size: 13px;
+            max-height: 400px;  /* T-10-U4: cap render height */
+            overflow-y: auto;
+        }
+        .extract-body.open { display: block; }
+
+        /* Phase 16 / REACT-02: react-row + 5-button intent row (CONTEXT Areas 1, 2, 4) */
+        .react-row { margin-top: 6px; }
+        /* Orphan react-rows: real entries always have <strong> from **[Channel]** markdown.
+           Hide any <p> with buttons but no <strong> = no text content. */
+        .digest p:has(.react-row):not(:has(strong)) { display: none; }
+        .digest p:has(.vote-buttons):not(:has(strong)):not(:has(.react-row)) { display: none; }
+        .react-btn {
+            background: none; border: 1px solid #ccc; border-radius: 4px;
+            padding: 2px 8px; margin: 0 2px; cursor: pointer;
+            font-size: 14px; line-height: 1;
+        }
+        .react-btn:hover { background: #f5f5f5; }
+        .react-btn--skip { color: #888; opacity: 0.7; }
+        .react-btn--skip:hover { opacity: 1; }
+
+        /* Idea 4 (Attention Schema): saliency badges */
+        .sal-badges { margin-left: 8px; }
+        .badge-sal {
+            display: inline-block; padding: 1px 5px; border-radius: 3px;
+            font-size: 10px; font-family: ui-monospace, monospace;
+            border: 1px solid; margin: 0 2px; vertical-align: middle;
+        }
+        .badge-sal-novelty-high { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
+        .badge-sal-novelty-med  { background: #f3f3f3; border-color: #bbb;    color: #555; }
+        .badge-sal-rel-high     { background: #e8f5e9; border-color: #a5d6a7; color: #2e7d32; }
+        .badge-sal-rel-med      { background: #f3f3f3; border-color: #bbb;    color: #555; }
+        .badge-sal-urgent       { background: #fff3e0; border-color: #ffb74d; color: #e65100; }
+        .badge-sal-recent       { background: #fafafa; border-color: #ccc;    color: #666; }
+        .react-queued, .react-skipped {
+            margin-left: 8px; padding: 2px 6px; border-radius: 3px;
+            font-size: 11px; font-family: ui-monospace, monospace;
+            transition: opacity 200ms;
+        }
+        .react-queued  { background: #e3f2fd; color: #1565c0; }
+        .react-skipped { background: #f3f3f3; color: #555; }
+        .react-error   { color: #c62828; font-size: 11px; margin-left: 8px; }
+        .digest-item--skipped { opacity: 0.85; }
+        /* Forward-compat soft-cap banner — hidden by default (Phase 20) */
+        .banner-softcap {
+            display: none; background: #ffebee; color: #c62828;
+            border: 1px solid #f44336; padding: 8px; margin-bottom: 12px;
+            border-radius: 4px;
+        }
+        .banner-softcap.banner--show { display: block; }
+
+        /* Phase 21 / GATE-05: gate-status panel (read-only — no toggles) */
+        .gate-status {
+            border: 1px solid #ddd; border-radius: 6px;
+            padding: 10px 12px; margin-bottom: 16px;
+            background: #fafafa; font-size: 13px;
+        }
+        .gate-status-title {
+            font-weight: 600; margin-bottom: 6px; color: #555;
+        }
+        .gate-action {
+            display: flex; gap: 8px; align-items: baseline;
+            padding: 3px 0; border-bottom: 1px solid #eee;
+        }
+        .gate-action:last-child { border-bottom: none; }
+        .gate-emoji { font-size: 14px; }
+        .gate-label {
+            font-family: ui-monospace, monospace; min-width: 80px;
+            text-transform: uppercase; font-size: 11px;
+        }
+        .gate-state {
+            font-family: ui-monospace, monospace; font-size: 11px;
+            padding: 1px 6px; border-radius: 3px;
+        }
+        .gate-action[data-locked="true"]  { color: #888; }
+        .gate-action[data-locked="false"] { color: #2a7; }
+        .gate-action[data-locked="true"]  .gate-state { background: #f3f3f3; color: #777; }
+        .gate-action[data-locked="false"] .gate-state { background: #e8f5e9; color: #2e7d32; }
+        .gate-stats { font-size: 11px; color: #888; margin-left: auto; }
+
+        /* Task 3: draft status dropdown injected into .react-row */
+        .draft-status-select {
+            margin-left: 8px;
+            font-size: 0.75rem;
+            opacity: 0.7;
+            border: 1px solid #555;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+        .draft-status-select:hover { opacity: 1; }
+
+        /* Task 6: pending drafts badge */
+        .badge-drafts-pending {
+          display: inline-block;
+          background: #2d4a6b;
+          color: #7eb8f7;
+          border-radius: 4px;
+          padding: 2px 8px;
+          font-size: 0.75rem;
+          margin-left: 8px;
+          cursor: default;
+        }
+    </style>
+</head>
+<body>
+    <nav style="margin-bottom: 16px; padding: 8px 0; border-bottom: 1px solid #ddd; font-size: 0.9rem;">
+        <a href="/" style="color: #1a73e8; text-decoration: none; margin-right: 20px;">📰 Дайджест</a>
+        <a href="/research-tools" style="color: #1a73e8; text-decoration: none; margin-right: 20px;">🔬 Research Tools</a>
+        <a href="/compare" style="color: #1a73e8; text-decoration: none; margin-right: 20px;">⚖️ Сравнить</a>
+        <a href="/papers" style="color: #1a73e8; text-decoration: none; margin-right: 20px;">📄 Статьи</a>
+        <a href="/search" style="color: #1a73e8; text-decoration: none; margin-right: 20px;">🔍 Поиск</a>
+        <a href="/telemetry" style="color: #1a73e8; text-decoration: none; margin-right: 20px;">📊 Телеметрия</a>
+        <a href="/sources" style="color: #1a73e8; text-decoration: none; margin-right: 20px;">📡 Источники</a>
+        <a href="http://localhost:8001" style="color: #2a9d2a; text-decoration: none; margin-right: 20px;">💰 Финансы</a>
+    </nav>
+
+    {% if audio_url %}
+    <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
+        <audio controls style="flex: 1; max-width: 480px;" src="{{ audio_url }}">
+            Ваш браузер не поддерживает аудио.
+        </audio>
+        <span style="font-size: 12px; color: #888;">🎧 Аудио-дайджест</span>
+    </div>
+    {% endif %}
+
+    {% if last_run %}
+        {% if last_run.status == 'OK' %}
+            <div class="badge badge-ok">
+                Last run: {{ last_run.timestamp }} &mdash; OK
+                (collected={{ last_run.collected }} curated={{ last_run.curated }} digest={{ last_run.digest_state }})
+            </div>
+            {% if last_run.profile_fallback %}
+            <span class="badge badge-warn" title="Pipeline ran with v1.0 hardcoded profile because Obsidian source was unreachable or invalid">PROFILE FALLBACK</span>
+            {% endif %}
+            {% if last_run.drafts_pending %}
+            <span class="badge-drafts-pending" title="{{ last_run.drafts_pending }} drafts awaiting review">
+              📝 {{ last_run.drafts_pending }} pending
+            </span>
+            {% endif %}
+        {% else %}
+            <div class="badge badge-fail">
+                Last run: {{ last_run.timestamp }} &mdash; FAIL
+                (error={{ last_run.error }})
+            </div>
+        {% endif %}
+    {% endif %}
+
+    <!-- Phase 16 forward-compat: soft-cap banner. Hidden by default; activated
+         by reactClick() on 400 with body containing 'soft_cap_exceeded' (Phase 20). -->
+    <div id="banner-softcap" class="banner-softcap" role="alert">
+        Soft cap: 5 active chains. Finish or kill an active one before starting more.
+        <button type="button" onclick="this.parentElement.classList.remove('banner--show')"
+                style="float:right;background:none;border:none;cursor:pointer;color:#c62828;">×</button>
+    </div>
+
+    {# Phase 21 / GATE-05: read-only gate-status panel. Omitted entirely when
+       gate_status is None (precision.get_gate_status raised in main.py). #}
+    {% if gate_status %}
+    <div class="gate-status">
+        <div class="gate-status-title">Precision gate</div>
+        {% for action, info in gate_status.items() %}
+        {% set emoji = {'brainstorm': '🧠', 'docs': '📄', 'link': '🔗', 'finish': '🏁'}[action] %}
+        <div class="gate-action" data-action="{{ action }}" data-locked="{{ 'true' if info.locked else 'false' }}">
+            <span class="gate-emoji">{{ emoji }}</span>
+            <span class="gate-label">{{ action }}</span>
+            <span class="gate-state">{{ 'LOCKED' if info.locked else 'UNLOCKED' }}</span>
+            <span class="gate-stats">Wilson {{ '%.2f'|format(info.wilson) }} (n={{ '%.1f'|format(info.n) }}, &gt;{{ '%.2f'|format(info.threshold) }})</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <h1>Your Digests</h1>
+    {% if digest_nav %}
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;font-size:.95rem;">
+        {% if digest_nav.next_id %}
+        <a href="/?digest_id={{ digest_nav.next_id }}" style="color:#1a73e8;text-decoration:none;padding:4px 10px;border:1px solid #1a73e8;border-radius:4px;">← Новее</a>
+        {% else %}
+        <span style="color:#ccc;padding:4px 10px;border:1px solid #ddd;border-radius:4px;">← Новее</span>
+        {% endif %}
+        <span style="color:#888;">{{ digest_nav.position }} / {{ digest_nav.total }}</span>
+        {% if digest_nav.prev_id %}
+        <a href="/?digest_id={{ digest_nav.prev_id }}" style="color:#1a73e8;text-decoration:none;padding:4px 10px;border:1px solid #1a73e8;border-radius:4px;">Старее →</a>
+        {% else %}
+        <span style="color:#ccc;padding:4px 10px;border:1px solid #ddd;border-radius:4px;">Старее →</span>
+        {% endif %}
+        {% if digest_nav.position > 1 %}
+        <a href="/" style="color:#888;text-decoration:none;font-size:.85rem;">↑ Последний</a>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if not digests %}
+        <p>You're all caught up! No active digests.</p>
+    {% endif %}
+    {% for digest in digests %}
+        <div class="digest">
+            <small>{{ digest.created_at }}</small>
+            <div>{{ digest.html_content | safe }}</div>
+        </div>
+    {% endfor %}
+
+    <script>
+        // Phase 5 / FB-03: vanilla fetch click handler (D-09).
+        // Called from inline onclick="voteFeedback(POST_ID, RATING, this)" set
+        // by src/web/main.py:_inject_buttons.
+        async function voteFeedback(postId, rating, btn) {
+            try {
+                const response = await fetch('/feedback', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({post_id: postId, rating: rating}),
+                });
+                if (!response.ok) {
+                    // D-24: log to console only — no popup, no alert.
+                    console.error('feedback POST failed:', response.status, await response.text());
+                    return;
+                }
+                // Voted button gets .voted; others lose it. Vote is changeable.
+                const wrapper = btn.closest('.vote-buttons');
+                if (wrapper) {
+                    wrapper.querySelectorAll('button').forEach(b => b.classList.remove('voted'));
+                    btn.classList.add('voted');
+                }
+            } catch (err) {
+                // D-24: no alert; log only. Network errors should not block the UI.
+                console.error('feedback fetch error:', err);
+            }
+        }
+
+        // Phase 10 EXTRACT-06: toggle extracted_body panel (D-16 collapsible-by-default).
+        function toggleExtract(postId) {
+            const panel = document.getElementById('extract-body-' + postId);
+            if (panel) panel.classList.toggle('open');
+        }
+
+        // Phase 16 / REACT-02: react-button click handler. Vanilla fetch, no framework.
+        // Called from inline onclick="reactClick(ITEM_ID, 'ACTION', this)" set by
+        // src/web/main.py:_inject_react_buttons.
+        //
+        // Optimistic UI: badge inserted IMMEDIATELY (CONTEXT Area 2). Reverted on
+        // non-200. Skip-action also adds digest-item--skipped to parent (Area 4).
+        // Soft-cap forward-compat: 400 + 'soft_cap_exceeded' substring -> show
+        // banner. Code path is wired even though it never fires in Phase 16.
+        async function reactClick(itemId, action, btn) {
+            // Client-side debounce — 200ms re-enable, prevents racing the 60s window
+            btn.disabled = true;
+            setTimeout(() => { btn.disabled = false; }, 200);
+
+            const wrapper = btn.closest('.react-row');
+            // WR-03: defensive null-check — if .react-row was renamed/removed
+            // upstream, log + bail rather than crashing on .querySelector.
+            // Mirrors the voteFeedback() pattern (`if (wrapper) {...}`).
+            if (!wrapper) {
+                console.error('react-row wrapper missing for', btn);
+                return;
+            }
+            // Remove any existing badge (queued/skipped/error) before inserting new
+            const existingBadge = wrapper.querySelector('.react-queued, .react-skipped, .react-error');
+            if (existingBadge) existingBadge.remove();
+
+            const badge = document.createElement('span');
+            badge.className = (action === 'skip') ? 'react-skipped' : 'react-queued';
+            badge.textContent = (action === 'skip') ? 'skipped' : 'queued';
+            wrapper.appendChild(badge);
+
+            // Skip-only: dim the parent digest item (CONTEXT Area 4).
+            // WR-02: track the dimmed element so we can revert the class on
+            // every non-2xx path (400, !ok, network error). Without the
+            // ref, a failed skip leaves the item permanently dimmed while
+            // showing an error badge — confusing UX.
+            let dimmedItem = null;
+            if (action === 'skip') {
+                const item = btn.closest('li, .digest-item, p') || wrapper.parentElement;
+                if (item) {
+                    item.classList.add('digest-item--skipped');
+                    dimmedItem = item;
+                }
+            }
+
+            try {
+                const response = await fetch(`/react/${itemId}/${action}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                });
+
+                if (response.status === 400) {
+                    // Forward-compat soft-cap path (Phase 20). Phase 16: never fires.
+                    const body = await response.json().catch(() => ({}));
+                    const detail = (body && body.detail) ? String(body.detail) : '';
+                    if (detail.includes('soft_cap_exceeded')) {
+                        const banner = document.getElementById('banner-softcap');
+                        if (banner) banner.classList.add('banner--show');
+                    }
+                    badge.remove();
+                    if (dimmedItem) dimmedItem.classList.remove('digest-item--skipped');
+                    const err = document.createElement('span');
+                    err.className = 'react-error';
+                    // T-16-11: textContent (not innerHTML) + 80-char slice
+                    err.textContent = (detail || 'invalid action').slice(0, 80);
+                    wrapper.appendChild(err);
+                    return;
+                }
+
+                if (!response.ok) {
+                    console.error('react POST failed:', response.status, await response.text());
+                    badge.remove();
+                    if (dimmedItem) dimmedItem.classList.remove('digest-item--skipped');
+                    const err = document.createElement('span');
+                    err.className = 'react-error';
+                    err.textContent = `error ${response.status}`;
+                    wrapper.appendChild(err);
+                    return;
+                }
+                // 200 OK — keep optimistic badge in place (server confirmed enqueue)
+            } catch (err) {
+                console.error('react fetch error:', err);
+                badge.remove();
+                if (dimmedItem) dimmedItem.classList.remove('digest-item--skipped');
+                const errEl = document.createElement('span');
+                errEl.className = 'react-error';
+                errEl.textContent = 'network error';
+                wrapper.appendChild(errEl);
+            }
+        }
+    </script>
+
+    <script>
+    // Task 3: draft status dropdown — fetches /api/drafts and injects <select>
+    // into each .react-row[data-item-id] that has a matching draft.
+    (function() {
+        const STATES = ['preliminary', 'research', 'execute', 'research_execute', 'archived'];
+        const LABELS = {
+            preliminary: '⬜ preliminary',
+            research: '🔍 research',
+            execute: '⚡ execute',
+            research_execute: '🔍⚡ research & execute',
+            archived: '📦 archived',
+        };
+
+        async function loadDraftDropdowns() {
+            let drafts;
+            try {
+                const resp = await fetch('/api/drafts');
+                if (!resp.ok) return;
+                drafts = await resp.json();
+            } catch { return; }
+
+            document.querySelectorAll('.react-row[data-item-id]').forEach(row => {
+                const itemId = row.dataset.itemId;
+                const info = drafts[itemId];
+                if (!info) return;
+
+                const sel = document.createElement('select');
+                sel.className = 'draft-status-select';
+                sel.dataset.reactionId = info.reaction_id;
+                sel.dataset.currentState = info.gate_state;
+                sel.title = `Draft: ${info.action} · ${info.source_name}`;
+
+                STATES.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = LABELS[s];
+                    if (s === info.gate_state) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+
+                sel.addEventListener('change', async function() {
+                    const prev = this.dataset.currentState;
+                    const next = this.value;
+                    try {
+                        const r = await fetch(`/api/draft/${this.dataset.reactionId}/status`, {
+                            method: 'PATCH',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({state: next}),
+                        });
+                        if (r.ok) {
+                            this.dataset.currentState = next;
+                        } else {
+                            this.value = prev;
+                            console.error('Draft status update failed:', await r.text());
+                        }
+                    } catch {
+                        this.value = prev;
+                    }
+                });
+
+                row.appendChild(sel);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadDraftDropdowns);
+    })();
+    </script>
+
+    <script>
+    /* Paper action buttons: 📊 graph (link), 🔍 similar, 📝 TLDR */
+    async function paperSimilar(itemId, btn) {
+        const out = document.getElementById('paper-out-' + itemId);
+        btn.disabled = true;
+        btn.textContent = '⏳';
+        out.textContent = 'Ищу похожие статьи...';
+        try {
+            const r = await fetch('/paper/' + itemId + '/similar', {method: 'POST'});
+            const d = await r.json();
+            out.textContent = r.ok
+                ? '✓ добавлено ' + d.inserted + ' новых статей в очередь'
+                : '❌ ' + (d.detail || 'ошибка');
+        } catch { out.textContent = '❌ сеть недоступна'; }
+        finally { btn.disabled = false; btn.textContent = '🔍'; }
+    }
+
+    async function paperTldr(itemId, btn) {
+        const out = document.getElementById('paper-out-' + itemId);
+        btn.disabled = true;
+        btn.textContent = '⏳';
+        out.style.cssText = 'display:block;margin-top:6px;font-size:.85rem;color:#444;line-height:1.5';
+        out.textContent = '📝 Генерирую TLDR (~30 сек)...';
+        try {
+            const r = await fetch('/paper/' + itemId + '/tldr', {method: 'POST'});
+            const d = await r.json();
+            if (r.ok) {
+                out.innerHTML = '<strong>' + (d.title || '') + '</strong><br><br>'
+                    + d.content.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+            } else {
+                out.textContent = '❌ ' + (d.detail || 'ошибка');
+            }
+        } catch { out.textContent = '❌ сеть недоступна'; }
+        finally { btn.disabled = false; btn.textContent = '📝'; }
+    }
+    </script>
+
+    <style>
+    .paper-btns { margin-left: 8px; }
+    .paper-btn {
+        background: none; border: 1px solid #ccc; border-radius: 4px;
+        cursor: pointer; font-size: .9rem; padding: 2px 6px; margin: 0 2px;
+        text-decoration: none; color: inherit; vertical-align: middle;
+    }
+    .paper-btn:hover { background: #f0f4ff; border-color: #90a4ea; }
+    .paper-out { display: block; margin-top: 4px; font-size: .82rem; color: #555; }
+    </style>
+
+    <!-- Phase 85 Plan 02: dwell-time beacon (passive read-time signal for P75 predictor) -->
+    <script src="/static/dwell_beacon.js" defer></script>
+</body>
+</html>

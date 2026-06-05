@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Чат по дайджесту</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; color: #333; background: #fafafa; }
+
+        .header {
+            padding: 10px 20px;
+            background: #1a1a2e;
+            color: #eee;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .header span { font-weight: 600; }
+        .header a { color: #aab; font-size: 12px; text-decoration: none; }
+        .header a:hover { color: #eef; }
+        .header a.active { color: #eee; font-weight: 600; }
+
+        .filter-bar {
+            background: #fff;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .filter-bar label { font-size: 12px; color: #666; margin-right: 4px; }
+        .filter-bar select,
+        .filter-bar input[type=date] {
+            font-size: 13px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 80px);
+        }
+
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .bubble-row {
+            display: flex;
+            margin-bottom: 12px;
+        }
+        .bubble-row.user { justify-content: flex-end; }
+        .bubble-row.assistant { justify-content: flex-start; }
+
+        .bubble {
+            padding: 8px 12px;
+            border-radius: 12px;
+            max-width: 90%;
+            line-height: 1.6;
+            font-size: 14px;
+            word-break: break-word;
+        }
+        .bubble.user {
+            background: #e3f2fd;
+            border-radius: 12px 12px 0 12px;
+            max-width: 70%;
+        }
+        .bubble.assistant {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 0 12px 12px 12px;
+        }
+        .bubble.warning {
+            border-left: 3px solid #ffc107;
+        }
+        .bubble.error {
+            border-left: 3px solid #f44336;
+        }
+
+        .citations {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .citation-pill {
+            display: inline-flex;
+            background: #e8eaf6;
+            color: #3949ab;
+            font-size: 11px;
+            border-radius: 10px;
+            padding: 2px 10px;
+            text-decoration: none;
+        }
+        .citation-pill:hover { background: #d1d4f5; }
+
+        .cursor {
+            display: inline-block;
+            animation: blink 0.7s step-end infinite;
+            color: #0066cc;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .input-row {
+            padding: 12px 16px;
+            background: #fff;
+            border-top: 1px solid #e5e5e5;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+        .input-row textarea {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            line-height: 1.5;
+            overflow-y: hidden;
+        }
+        .input-row textarea:focus { outline: none; border-color: #0066cc; }
+        .send-btn {
+            background: #0066cc;
+            color: #fff;
+            border: 0;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .send-btn:disabled { opacity: 0.6; cursor: wait; }
+        .send-btn:not(:disabled):hover { background: #0055aa; }
+
+        .empty-hint code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <span>Autorss Feed</span>
+    <a href="/">📰 Дайджест</a>
+    <a href="/sources">📡 Источники</a>
+    <a href="/chat" class="active">💬 Чат</a>
+</div>
+
+<div class="filter-bar">
+    <label for="cat-select">Категория:</label>
+    <select id="cat-select">
+        <option value="">Все категории</option>
+        {% for c in categories %}
+        <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+    </select>
+
+    <label for="date-from">С:</label>
+    <input type="date" id="date-from">
+
+    <label for="date-to">По:</label>
+    <input type="date" id="date-to">
+</div>
+
+<div class="chat-container">
+    <div class="chat-history" id="chat-history"></div>
+
+    <div class="input-row">
+        <textarea
+            id="question"
+            rows="1"
+            aria-label="Вопрос"
+            placeholder="Задайте вопрос о постах из дайджеста..."
+            oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px';"
+        ></textarea>
+        <button type="submit" class="send-btn" id="send-btn" onclick="sendQuestion()">Отправить</button>
+    </div>
+</div>
+
+<script>
+(function () {
+    var activeES = null;
+
+    function appendBubble(cls, html) {
+        var row = document.createElement('div');
+        row.className = 'bubble-row ' + cls;
+        var bubble = document.createElement('div');
+        bubble.className = 'bubble ' + cls;
+        bubble.innerHTML = html;
+        row.appendChild(bubble);
+        document.getElementById('chat-history').appendChild(row);
+        row.scrollIntoView({behavior: 'smooth'});
+        return bubble;
+    }
+
+    function enableSend() {
+        var btn = document.getElementById('send-btn');
+        btn.disabled = false;
+        btn.textContent = 'Отправить';
+    }
+
+    function disableSend() {
+        var btn = document.getElementById('send-btn');
+        btn.disabled = true;
+        btn.textContent = '...';
+    }
+
+    function removeCursor(bubble) {
+        var cursor = bubble.querySelector('.cursor');
+        if (cursor) cursor.remove();
+    }
+
+    function safeCitationUrl(url) {
+        if (!url) return null;
+        try {
+            var u = new URL(url);
+            if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+            return url;
+        } catch (e) { return null; }
+    }
+
+    function renderCitations(bubble, items) {
+        if (!items || !items.length) return;
+        var container = document.createElement('div');
+        container.className = 'citations';
+        items.forEach(function (c) {
+            var el;
+            var safeUrl = safeCitationUrl(c.url);
+            if (safeUrl) {
+                el = document.createElement('a');
+                el.href = safeUrl;
+                el.target = '_blank';
+                el.rel = 'noopener noreferrer';
+            } else {
+                el = document.createElement('span');
+            }
+            el.className = 'citation-pill';
+            el.textContent = c.channel || c.url || '?';
+            container.appendChild(el);
+        });
+        bubble.appendChild(container);
+    }
+
+    window.sendQuestion = function () {
+        var q = document.getElementById('question').value.trim();
+        if (!q) return;
+        var cat = document.getElementById('cat-select').value;
+        var from = document.getElementById('date-from').value;
+        var to = document.getElementById('date-to').value;
+
+        // Close any previous stream
+        if (activeES) { activeES.close(); activeES = null; }
+
+        // User bubble
+        appendBubble('user', escapeHtml(q));
+
+        // Prepare assistant bubble (empty, cursor blinking)
+        var aRow = document.createElement('div');
+        aRow.className = 'bubble-row assistant';
+        var aBubble = document.createElement('div');
+        aBubble.className = 'bubble assistant';
+        var cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        cursor.textContent = '|';
+        aBubble.appendChild(cursor);
+        aRow.appendChild(aBubble);
+        document.getElementById('chat-history').appendChild(aRow);
+        aRow.scrollIntoView({behavior: 'smooth'});
+
+        disableSend();
+
+        var url = '/chat/stream?q=' + encodeURIComponent(q)
+                + '&category=' + encodeURIComponent(cat)
+                + '&from_date=' + encodeURIComponent(from)
+                + '&to_date=' + encodeURIComponent(to);
+
+        var es = new EventSource(url);
+        activeES = es;
+
+        es.addEventListener('token', function (e) {
+            // Use createTextNode — safe against XSS regardless of e.data content
+            removeCursor(aBubble);
+            aBubble.insertBefore(
+                document.createTextNode(e.data),
+                null
+            );
+            var newCursor = document.createElement('span');
+            newCursor.className = 'cursor';
+            newCursor.textContent = '|';
+            aBubble.appendChild(newCursor);
+            aRow.scrollIntoView({behavior: 'smooth'});
+        });
+
+        es.addEventListener('citations', function (e) {
+            removeCursor(aBubble);
+            try {
+                renderCitations(aBubble, JSON.parse(e.data));
+            } catch (err) { /* ignore malformed JSON */ }
+        });
+
+        es.addEventListener('done', function () {
+            removeCursor(aBubble);
+            es.close();
+            activeES = null;
+            enableSend();
+        });
+
+        es.addEventListener('error', function (e) {
+            es.close();
+            activeES = null;
+            // Replace placeholder bubble with error bubble
+            aRow.remove();
+            var errMsg = (e.data && e.data.trim()) || 'Ошибка при генерации ответа. Попробуйте ещё раз или перезапустите сервер.';
+            // Detect empty-corpus message for warning style vs generic error
+            var cls = errMsg.indexOf('run_pipeline') !== -1 ? 'assistant warning' : 'assistant error';
+            var errRow = document.createElement('div');
+            errRow.className = 'bubble-row assistant';
+            var errBubble = document.createElement('div');
+            errBubble.className = 'bubble ' + cls;
+            if (errMsg.indexOf('run_pipeline') !== -1) {
+                errBubble.innerHTML = '<strong>Корпус пуст — запустите пайплайн</strong><br>'
+                    + '<span class="empty-hint">Корпус постов ещё не проиндексирован. Запустите пайплайн, чтобы создать эмбеддинги: '
+                    + '<code>.venv/Scripts/python.exe run_pipeline.py</code></span><br>'
+                    + '<small style="color:#888">После первого успешного запуска пайплайна чат будет готов к работе.</small>';
+            } else {
+                errBubble.textContent = errMsg;
+            }
+            errRow.appendChild(errBubble);
+            document.getElementById('chat-history').appendChild(errRow);
+            errRow.scrollIntoView({behavior: 'smooth'});
+            enableSend();
+        });
+    };
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, '&amp;')
+                   .replace(/</g, '&lt;')
+                   .replace(/>/g, '&gt;')
+                   .replace(/"/g, '&quot;')
+                   .replace(/'/g, '&#039;');
+    }
+
+    // Allow Enter (without Shift) to submit
+    document.getElementById('question').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendQuestion();
+        }
+    });
+
+    // Autofocus input on load
+    document.getElementById('question').focus();
+})();
+</script>
+
+</body>
+</html>

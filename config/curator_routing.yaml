@@ -1,0 +1,54 @@
+# Per-category curator backend routing.
+#
+# Values: ollama | claude
+# claude = claude-headless single-post scorer (uses Claude Max, no API cost)
+# ollama = local qwen2.5:7b (fast, free)
+#
+# Override all routing: set CURATOR_BACKEND env var (claude-batch still takes
+# full priority for the batch path regardless of this file).
+#
+# Purpose: route high-nuance categories to Claude for better recall,
+# high-volume/simpler categories to Ollama for speed.
+
+default: ollama
+
+# Phase 61 MR-02: per-call USD estimate for the daily_usd_caps gate. Operator
+# can update these in yaml when Anthropic changes pricing (no code deploy).
+# Defaults (used by cost_cap.py if this block is missing): claude=0.015,
+# claude-batch=0.012, ollama=0.0. Calibrated from single-post sonnet calls
+# (~5K in / 500 out ~= $0.015) and the 20-post batch path (per-call billing).
+usd_per_call:
+  claude: 0.015
+  claude-batch: 0.012
+  ollama: 0.0
+
+# Phase 43 (999.21): per-backend max input tokens — prevents silent context
+# overflow rejections. Conservative caps leave headroom for system prompt +
+# response. Counts surface via run_pipeline.py OK log truncation_count=N.
+max_input_tokens:
+  ollama: 24000        # qwen2.5:7b ~32K context; reserve for system + response
+  claude: 180000       # Claude Max ~200K; leave 20K headroom
+  claude-batch: 180000  # same cap; batch path bundles 20 posts so per-call slack matters less
+
+categories:
+  ai: claude          # multimodal posts, subtle relevance signals
+  psychology: claude  # therapeutic nuance, easy to mislabel
+  science: claude     # technical depth assessment
+  startup: ollama     # high volume, signal is fairly explicit
+  crypto: ollama      # high volume, fast enough
+  fintech: ollama     # straightforward relevance
+  fitness: ollama     # low nuance needed
+  newsletter: ollama  # high volume, broad content
+  other: ollama       # catch-all, default speed
+
+# Phase 61 (COST-CAP-01 / NFR-V23-02): per-category daily USD cap on Claude
+# backends. When today's spend (midnight GMT+5 reset) on category C exceeds
+# the cap, get_backend_for_category(C) silently returns 'ollama' until
+# midnight. Unset / missing entry = no cap (no fallback). USD estimated from
+# per-call constants in src/llm/cost_cap.py (claude 0.015, claude-batch 0.012).
+# Counter `cost_cap_falls_back=N` surfaces on each run's OK log line.
+daily_usd_caps:
+  ai: 2.50          # primary Claude burner — protect Max budget
+  psychology: 1.50  # smaller volume but still claude-routed
+  science: 1.50     # technical depth, claude-routed
+  # Unlisted categories = no cap (ollama-routed anyway)

@@ -1,0 +1,86 @@
+# export/ALLOWLIST.yaml
+# Controls what is included in the open-source export (phase 110 REL-01).
+# Allowlist semantics: ONLY paths under `included` ship to the public repo.
+# The `excluded` section is load-bearing for TRIM-03 — personal modules are
+# named explicitly so an auditor can verify they are absent from the export.
+
+included:
+  # Core pipeline
+  - src/agents/collector.py
+  - src/agents/curator.py
+  - src/agents/editor.py
+  - src/collectors/
+  - src/database/
+  - src/llm/
+  - src/profile/
+  # Reactive worker pipeline (generic)
+  - src/worker/react_worker.py
+  - src/worker/finish_worker.py
+  - src/worker/draft_manager.py
+  - src/worker/modes/
+  - src/worker/vault.py
+  - src/worker/linked_project.py
+  - src/worker/auto_remediation.py
+  - src/worker/precision.py
+  # Generic web routes / entry
+  - src/web/main_oss.py
+  - src/web/sources.py
+  - src/web/reactions.py
+  - src/web/chat.py
+  - src/web/chat_retrieval.py
+  - src/web/threshold.py
+  - src/web/dwell.py
+  - src/web/templates/chat.html
+  - src/web/templates/index.html
+  - src/web/templates/sources.html
+  - src/web/static/
+  - src/observability/
+  - src/agents/voice_digest.py
+  - src/categories.py
+  - src/env_loader.py
+  # Top-level
+  - run_pipeline.py
+  - config/curator_routing.yaml
+  - pyproject.toml
+  - export/ALLOWLIST.yaml
+  - config/project_aliases.json
+  - README.md
+  - LICENSE
+  - .env.example
+  - uv.lock
+  # OSS smoke test
+  - scripts/smoke_oss.py
+  - tests/test_smoke_oss.py
+  # Export tooling (ship for transparency + forks)
+  - scripts/export_oss.py
+  - tests/test_export_oss.py
+  - config/sources.txt.example
+
+excluded:
+  # Personal dashboard + personal widgets — hardcoded to personal Obsidian/state paths
+  - src/web/dashboard.py
+  - src/web/widgets/briefing.py
+  - src/web/widgets/cross_signals.py
+  - src/web/widgets/health.py
+  - src/web/widgets/health_strip.py
+  - src/web/widgets/gaming.py
+  - src/web/widgets/neuroband.py
+  - src/web/widgets/brainstorm_review.py
+  - src/web/widgets/training.py
+  - src/web/widgets/finance.py
+  - src/web/widgets/cushion.py
+  - src/web/orphan_claim.py
+  - src/web/weekly_insight.py
+  - src/web/brainstorm_decisions.py
+  # Personal signal subsystems
+  - src/health/
+  - src/neuroband/
+  # Personal scripts
+  - scripts/profile_ablation.py
+  - scripts/notebook.py
+  - scripts/_review_anchors.py
+  - scripts/_review_subagent_prompt.py
+  - scripts/auto_review_drafts.py
+  - scripts/backfill_brainstorm_decisions.py
+  - scripts/merge_drafts_review.py
+  - scripts/replay_brainstorms.py
